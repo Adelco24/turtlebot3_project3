@@ -23,7 +23,7 @@ class AStarNode(Node):
         self.L = 0.287 #distance between wheels
         self.R = 0.220 #robot radius
         self.sim_update_time = 1.0
-        self.rpms = [50,100]
+        self.rpms = [25,50]
         self.actions = [
             (0,self.rpms[0]),
             (self.rpms[0],0),
@@ -69,7 +69,6 @@ class AStarNode(Node):
                     self.sim_update_time = T
     
     def drive_turtlebot(self,wheel_rpms_path):
-        """Run the keyboard control node"""
         
         self.msg = """
         placeholder
@@ -98,6 +97,7 @@ class AStarNode(Node):
                 if node in trajectory_map:
                     trajectory = trajectory_map[node]
                     x0, y0, theta0 = trajectory[0]
+                    self.get_logger().info(f"{x0},{y0},{theta0}")
                     theta0 = np.radians(theta0)
                     xf, yf, thetaf = trajectory[-1]
                     thetaf = np.radians(thetaf)
@@ -112,7 +112,9 @@ class AStarNode(Node):
                         if ((xf-x)**2 + (yf-y)**2)<min_dist_2:
                             min_dist_2 = (xf-x)**2 + (yf-y)**2
                             wheel_rpms = action
+                    self.get_logger().info(f"associated rpms: ({wheel_rpms[0]},{wheel_rpms[1]}])")
                     rpm_list.append(wheel_rpms)
+            rpm_list.append((0,0))
             return rpm_list
         return None
     def get_clearances(self,user_clearance):
@@ -157,8 +159,10 @@ class AStarNode(Node):
                 ],
 
                 "Clearance 6": [
-                    lambda x, y: x >= 0,
-                    lambda x, y: x <= 10+clearance,
+                    #lambda x, y: x >= 0,
+                    #lambda x, y: x <= 10+clearance,
+                    lambda x, y: x >= -2,
+                    lambda x, y: x <= -1,
                     lambda x, y: y >= 0,
                     lambda x, y: y <= self.map_y
                 ],
@@ -244,7 +248,7 @@ class AStarNode(Node):
         trajectory_map = {}
         # Mark start time
         start_time = time.time()
-        threshold = self.R       # distance threshold to goal to consider success - radius of robot?
+        threshold = self.R * 1000       # distance threshold to goal to consider success - radius of robot?
         early_stop_on = False
         early_stop = 100      # number of nodes to explore before quitting algorithm
         duplicate_distance_threshold = 100 # if within 5mm of other config, consider as duplicate
@@ -369,6 +373,9 @@ class AStarNode(Node):
                         parent_map[neighbor] = current_node
 
                 # early stop to give up -- for testing
+                if len(explored_nodes) % 100 == 0:
+                    self.get_logger().info(f"{len(explored_nodes)} explored...")
+                    self.get_logger().info(f"{current_node[0]},{current_node[1]},{current_node[2]}")
                 if early_stop_on:
                     if len(explored_nodes) >= early_stop:
                         break
@@ -385,7 +392,7 @@ def main(args=None):
     rclpy.init(args=args)
     node = AStarNode()
     start = (0,2000,0)
-    goal = (1000,2000)
+    goal = (1800,2400)
     clearances = node.get_clearances(1)
     action_set = node.actions
 
