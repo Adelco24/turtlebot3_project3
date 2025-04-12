@@ -4,6 +4,7 @@ import numpy as np
 import heapq as hq
 #import cv2
 import time
+import sys
 
 from typing import Dict, Tuple, List, Union
 #from numpy.typing import NDArray
@@ -22,7 +23,7 @@ class AStarNode(Node):
         self.r = 0.033 #wheel radius
         self.L = 0.287 #distance between wheels
         self.R = 0.220 #robot radius
-        self.sim_update_time = 1.0
+        #self.sim_update_time = 1.0
         self.rpms = [25,50]
         self.actions = [
             (0,self.rpms[0]),
@@ -35,8 +36,35 @@ class AStarNode(Node):
             (self.rpms[1],self.rpms[1])
         ]
 
+    def set_rpms_and_actions(self,rpm1,rpm2):
+        self.rpms = [rpm1,rpm2]
+        self.actions = [
+            (0,self.rpms[0]),
+            (self.rpms[0],0),
+            (self.rpms[0],self.rpms[0]),
+            (0,self.rpms[1]),
+            (self.rpms[1],0),
+            (self.rpms[1],self.rpms[0]),
+            (self.rpms[0],self.rpms[1]),
+            (self.rpms[1],self.rpms[1])
+        ]
 
-    def get_pred_traj_pt(self,rpms,x0,y0,theta0,T):
+    def get_action_from_points(self,x0,y0,theta0,xf,yf,thetaf):
+        time_range = np.linspace(0.1,5.0,100)
+        min_dist_2 = (xf-x0)**2 + (yf-y0)**2 + (thetaf-theta0)**2
+        best_action = self.actions[0]
+        best_t = 1.0
+        for rpms in self.actions:
+            for T in time_range:
+                x,y,theta = self.rpm_to_point(rpms,x0,y0,theta0,T)
+                if ((xf-x)**2 + (yf-y)**2 + (thetaf-theta)**2)<min_dist_2:
+                    min_dist_2 = (xf-x)**2 + (yf-y)**2 + (thetaf-theta)**2
+                    best_t = T
+                    best_action = rpms
+        self.get_logger().info(f"sim_time:{best_t}")
+        return best_t, best_action
+
+    def rpm_to_point(self,rpms,x0,y0,theta0,T):
         # Convert to rad/s
         wl = rpms[0] * 2 * np.pi / 60
         wr = rpms[1] * 2 * np.pi / 60
@@ -57,19 +85,8 @@ class AStarNode(Node):
 
         return xf, yf, thetaf
     
-    def get_pred_update_time(self,x0,y0,theta0,xf,yf,thetaf):
-        # Convert to rad/s
-        time_range = np.linspace(0.1,5.0,100)
-        min_dist_2 = (xf-x0)**2 + (yf-y0)**2 + (thetaf-theta0)**2
-        for rpms in self.actions:
-            for T in time_range:
-                x,y,theta = self.get_pred_traj_pt(rpms,x0,y0,theta0,T)
-                if ((xf-x)**2 + (yf-y)**2 + (thetaf-theta)**2)<min_dist_2:
-                    min_dist_2 = (xf-x)**2 + (yf-y)**2 + (thetaf-theta)**2
-                    self.sim_update_time = T
-        self.get_logger().info(f"sim_time:{self.sim_update_time}")
     
-    def drive_turtlebot(self,wheel_rpms_path):
+    def drive_turtlebot(self,wheel_rpms_path,runtimes):
         
         self.msg = """
         placeholder
@@ -77,9 +94,10 @@ class AStarNode(Node):
 
         self.get_logger().info(self.msg)
         velocity_message = Twist()
-        for UL_rpm, UR_rpm in wheel_rpms_path:
-            UL = UL_rpm * 2 * np.pi / 60
-            UR = UR_rpm * 2 * np.pi / 60
+        for i,rpm_vals in enumerate(wheel_rpms_path):
+            update_time = runtimes[i]
+            UL = rpm_vals[0]* 2 * np.pi / 60
+            UR = rpm_vals[1] * 2 * np.pi / 60
 
             linear_x = (self.r / 2) * (UL + UR)
             angular_z = (self.r / self.L )* (UR - UL)
@@ -87,16 +105,21 @@ class AStarNode(Node):
             velocity_message.linear.x = linear_x
             velocity_message.angular.z = angular_z
             start_time = self.get_clock().now().nanoseconds
-            while self.get_clock().now().nanoseconds - start_time < self.sim_update_time*1e9*1.25:
+            duration_ns = int(update_time * 1.4e9)
+            while self.get_clock().now().nanoseconds - start_time < duration_ns:
                 self.cmd_vel_pub.publish(velocity_message)
-                time.sleep(0.05)
-            self.get_logger().info(f"Left rpm: {UL_rpm}. Right rpm: {UR_rpm}")
+                rclpy.spin_once(self,timeout_sec=0.05)
+            stop_msg = Twist()
+            self.cmd_vel_pub.publish(stop_msg)
+            rclpy.spin_once(self,timeout_sec=0.1)
+            self.get_logger().info(f"Left rpm: {rpm_vals[0]}. Right rpm: {rpm_vals[1]}")
     
     def get_vels_from_path(self, path, trajectory_map):
         if path is not None:
             rpm_list = []
             wp_list = []
-            have_runtime = False
+            runtimes = []
+
             for node in path:
                 if node in trajectory_map:
                     trajectory = trajectory_map[node]
@@ -106,21 +129,15 @@ class AStarNode(Node):
                     theta0 = np.radians(theta0)
                     xf, yf, thetaf = trajectory[-1]
                     thetaf = np.radians(thetaf)
-                    if not have_runtime:
-                        self.get_pred_update_time(x0,y0,theta0,xf,yf,thetaf)
-                        have_runtime = True
 
-                    wheel_rpms = self.actions[0]
-                    min_dist_2 = (xf-x0)**2 + (yf-y0)**2
-                    for action in self.actions:
-                        x,y,_ = self.get_pred_traj_pt(action,x0,y0,theta0,self.sim_update_time)
-                        if ((xf-x)**2 + (yf-y)**2)<min_dist_2:
-                            min_dist_2 = (xf-x)**2 + (yf-y)**2
-                            wheel_rpms = action
+                    runtime,wheel_rpms = self.get_action_from_points(x0,y0,theta0,xf,yf,thetaf)
+
                     self.get_logger().info(f"associated rpms: ({wheel_rpms[0]},{wheel_rpms[1]}])")
                     rpm_list.append(wheel_rpms)
+                    runtimes.append(runtime)
             rpm_list.append((0,0))
-            return rpm_list,wp_list
+            runtimes.append(1.0)
+            return rpm_list,wp_list,runtimes
         return None
     def get_clearances(self,user_clearance):
 
@@ -395,15 +412,38 @@ class AStarNode(Node):
 
 def main(args=None):
     rclpy.init(args=args)
+    cli_args = sys.argv[1:]
+    if len(cli_args) != 5 and len(cli_args) != 0:
+        print("Usage: ros2 run turtlebot3_project3 a_star.py <xg> <yg> <rpm1> <rpm2> <clearance>")
+        return
+
+    if len(cli_args) == 5:
+        # Parse CLI arguments
+        xg = int(cli_args[0])
+        yg = int(cli_args[1])
+        rpm1 = int(cli_args[2])
+        rpm2 = int(cli_args[3])
+        clearance = int(cli_args[4])
+    else:
+        xg = 1600
+        yg = 500
+        rpm1 = 25
+        rpm2 = 50
+        clearance = 200
+
+    x0 = 500
+    y0 = 2500
+    theta0 = 0
     node = AStarNode()
-    start = (0,2500,0) #corresponds to map from other code
-    goal = (1500,400) #corresponds to map from other code
-    clearances = node.get_clearances(200)
+    start = (x0,y0,theta0) #corresponds to map from other code
+    goal = (xg,yg) #corresponds to map from other code
+    clearances = node.get_clearances(clearance)
+    node.set_rpms_and_actions(rpm1,rpm2)
     action_set = node.actions
 
     path, _, trajectory_map, _ = node.a_star(start, goal, clearances, action_set)
-    wheel_rpms_path,wp_list = node.get_vels_from_path(path,trajectory_map)
-    node.drive_turtlebot(wheel_rpms_path)
+    wheel_rpms_path,wp_list,runtimes = node.get_vels_from_path(path,trajectory_map)
+    node.drive_turtlebot(wheel_rpms_path,runtimes)
     frame = np.ones((node.map_y, node.map_x, 3), dtype=np.uint8) * 255
 
     # Generate meshgrid of all (x, y) coordinates
