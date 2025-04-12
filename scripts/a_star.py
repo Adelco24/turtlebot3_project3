@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+import cv2
 import numpy as np
 import heapq as hq
 #import cv2
@@ -67,6 +67,7 @@ class AStarNode(Node):
                 if ((xf-x)**2 + (yf-y)**2 + (thetaf-theta)**2)<min_dist_2:
                     min_dist_2 = (xf-x)**2 + (yf-y)**2 + (thetaf-theta)**2
                     self.sim_update_time = T
+        self.get_logger().info(f"sim_time:{self.sim_update_time}")
     
     def drive_turtlebot(self,wheel_rpms_path):
         
@@ -85,18 +86,22 @@ class AStarNode(Node):
 
             velocity_message.linear.x = linear_x
             velocity_message.angular.z = angular_z
-            self.cmd_vel_pub.publish(velocity_message)
+            start_time = self.get_clock().now().nanoseconds
+            while self.get_clock().now().nanoseconds - start_time < self.sim_update_time*1e9*1.25:
+                self.cmd_vel_pub.publish(velocity_message)
+                time.sleep(0.05)
             self.get_logger().info(f"Left rpm: {UL_rpm}. Right rpm: {UR_rpm}")
-            time.sleep(self.sim_update_time)  # adjust for dt simulation
     
     def get_vels_from_path(self, path, trajectory_map):
         if path is not None:
             rpm_list = []
+            wp_list = []
             have_runtime = False
             for node in path:
                 if node in trajectory_map:
                     trajectory = trajectory_map[node]
                     x0, y0, theta0 = trajectory[0]
+                    wp_list.append(trajectory[0])
                     self.get_logger().info(f"{x0},{y0},{theta0}")
                     theta0 = np.radians(theta0)
                     xf, yf, thetaf = trajectory[-1]
@@ -115,11 +120,11 @@ class AStarNode(Node):
                     self.get_logger().info(f"associated rpms: ({wheel_rpms[0]},{wheel_rpms[1]}])")
                     rpm_list.append(wheel_rpms)
             rpm_list.append((0,0))
-            return rpm_list
+            return rpm_list,wp_list
         return None
     def get_clearances(self,user_clearance):
 
-        clearance = 5 + self.R + user_clearance
+        clearance = 5 + (self.R*1000) + user_clearance
         # Define clearances
         clearances = {
 
@@ -391,14 +396,39 @@ class AStarNode(Node):
 def main(args=None):
     rclpy.init(args=args)
     node = AStarNode()
-    start = (0,2000,0)
-    goal = (1800,2400)
-    clearances = node.get_clearances(1)
+    start = (0,2500,0) #corresponds to map from other code
+    goal = (1500,400) #corresponds to map from other code
+    clearances = node.get_clearances(200)
     action_set = node.actions
 
     path, _, trajectory_map, _ = node.a_star(start, goal, clearances, action_set)
-    wheel_rpms_path = node.get_vels_from_path(path,trajectory_map)
+    wheel_rpms_path,wp_list = node.get_vels_from_path(path,trajectory_map)
     node.drive_turtlebot(wheel_rpms_path)
+    frame = np.ones((node.map_y, node.map_x, 3), dtype=np.uint8) * 255
+
+    # Generate meshgrid of all (x, y) coordinates
+    x_grid, y_grid = np.meshgrid(np.arange(node.map_x), np.arange(node.map_y))
+
+    # Compute clearance area and display as gray
+    for conditions in clearances.values():
+        mask = np.ones_like(x_grid, dtype=bool)
+        for cond in conditions:
+            mask &= cond(x_grid, y_grid)
+        frame[mask] = (150, 150, 150)
+
+    # Flip to match coordinate system
+    frame = cv2.flip(frame, 0)
+
+    # Draw final start and goal points
+    cv2.circle(frame, (int(start[0]), int(node.map_y - start[1])), 50, (0, 0, 255), -1)  # Red (start)
+    cv2.circle(frame, (int(goal[0]), int(node.map_y - goal[1])), 50, (0, 255, 0), -1)  # Green (goal)
+    for wp in wp_list:
+        cv2.circle(frame,(int(wp[0]), int(node.map_y - wp[1])), 25, (0, 0, 255), -1)  # Red
+    scale_frame = cv2.resize(frame, (int(node.map_x * .2), int(node.map_y * .2)), interpolation=cv2.INTER_LINEAR)
+    cv2.imshow("A* Path Visualization", scale_frame)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
     node.destroy_node()
     rclpy.shutdown()
 
