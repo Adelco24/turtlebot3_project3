@@ -63,8 +63,8 @@ class AStarNode(Node):
             (self.rpms[0],self.rpms[1]),
             (self.rpms[1],self.rpms[1])
         ]
-
-        # Callback function for Odometry updates from /odom topic
+        
+    # Callback function for Odometry updates from /odom topic
     def odom_callback(self, msg):
         x = msg.pose.pose.position.x
         y = msg.pose.pose.position.y
@@ -112,7 +112,6 @@ class AStarNode(Node):
                     best_t = T
                     best_action = rpms
 
-        self.get_logger().info(f"sim_time:{best_t}")
         return best_t, best_action
 
 
@@ -183,14 +182,14 @@ class AStarNode(Node):
                     x0, y0, theta0 = trajectory[0]
                     wp_list.append(trajectory[0])  # Store initial pose of each trajectory
 
-                    self.get_logger().info(f"{x0},{y0},{theta0}")
+                    #self.get_logger().info(f"{x0},{y0},{theta0}")
                     theta0 = np.radians(theta0)
                     xf, yf, thetaf = trajectory[-1]
                     thetaf = np.radians(thetaf)
 
                     # Find best matching action and time
                     runtime, wheel_rpms = self.get_action_from_points(x0, y0, theta0, xf, yf, thetaf)
-                    self.get_logger().info(f"associated rpms: ({wheel_rpms[0]},{wheel_rpms[1]}])")
+                    #self.get_logger().info(f"associated rpms: ({wheel_rpms[0]},{wheel_rpms[1]}])")
 
                     rpm_list.append(wheel_rpms)
                     runtimes.append(runtime)
@@ -227,7 +226,8 @@ class AStarNode(Node):
             x_goal = wp[0]
             y_goal = wp[1]
 
-            self.get_logger().info(f"Waypoint {idx+1}: ({x_goal:.2f}, {y_goal:.2f}), RPMs = ({rpm_l}, {rpm_r})")
+            xsim,ysim = self.glob_frame_to_sim_frame(wp)
+            self.get_logger().info(f"Waypoint {idx+1}: ({xsim:.2f}, {ysim:.2f}), RPMs = ({rpm_l}, {rpm_r})")
 
             # Convert wheel RPMs to linear and angular velocities
             wl = rpm_l * 2 * np.pi / 60
@@ -554,10 +554,14 @@ def main(args=None):
         clearance = 200
 
     # Initial pose in simulation frame, then convert to map
-    x0 = 0.5
-    y0 = 1.0
-    theta0 = 0
     node = AStarNode()
+    if node.current_pose is not None:
+        x0, y0, theta0 = node.current_pose
+        theta0 = int(round(theta0/30.0)*30)
+    else:
+        x0 = 0.5
+        y0 = 1.0
+        theta0 = 0
     x0, y0 = node.sim_frame_to_glob_frame((x0, y0))
     xg, yg = node.sim_frame_to_glob_frame((xg, yg))
     start = (x0, y0, theta0)
@@ -573,8 +577,6 @@ def main(args=None):
 
     # Convert path to RPMs and waypoint poses
     wheel_rpms_path, wp_list, runtimes = node.get_vels_from_path(path, trajectory_map)
-    node.get_logger().info(f"Wheel RPM path length: {len(wheel_rpms_path)}")
-    node.get_logger().info(f"Waypoint path length: {len(wp_list)}")
 
     # Drive the robot through waypoints (excluding the start)
     node.drive_turtlebot(wp_list[1:], wheel_rpms_path)
