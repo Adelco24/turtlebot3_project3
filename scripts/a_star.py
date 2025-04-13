@@ -11,6 +11,23 @@ from typing import Dict, Tuple, List, Union
 import rclpy
 from rclpy.node import Node
 from geometry_msgs.msg import Twist
+from nav_msgs.msg import Odometry
+import math
+
+class PID:
+    def __init__(self, kp, ki, kd):
+        self.kp = kp
+        self.ki = ki
+        self.kd = kd
+        self.integral = 0
+        self.prev_error = 0
+
+    def compute(self, error, dt):
+        self.integral += error * dt
+        derivative = (error - self.prev_error) / dt if dt > 0 else 0
+        output = self.kp * error + self.ki * self.integral + self.kd * derivative
+        self.prev_error = error
+        return output
 
 class AStarNode(Node):
 
@@ -24,6 +41,8 @@ class AStarNode(Node):
         self.L = 0.287 #distance between wheels
         self.R = 0.220 #robot radius
         #self.sim_update_time = 1.0
+        self.current_pose = None
+        self.odom_sub = self.create_subscription(Odometry, '/odom',self.odom_callback,10)
         self.rpms = [25,50]
         self.actions = [
             (0,self.rpms[0]),
@@ -35,6 +54,18 @@ class AStarNode(Node):
             (self.rpms[0],self.rpms[1]),
             (self.rpms[1],self.rpms[1])
         ]
+
+    def odom_callback(self, msg):
+        x = msg.pose.pose.position.x
+        y = msg.pose.pose.position.y
+
+        # Convert quaternion to yaw (theta)
+        q = msg.pose.pose.orientation
+        siny_cosp = 2.0 * (q.w * q.z + q.x * q.y)
+        cosy_cosp = 1.0 - 2.0 * (q.y * q.y + q.z * q.z)
+        theta = math.atan2(siny_cosp, cosy_cosp)
+
+        self.current_pose = (x, y, theta)
 
     def set_rpms_and_actions(self,rpm1,rpm2):
         self.rpms = [rpm1,rpm2]
@@ -86,7 +117,7 @@ class AStarNode(Node):
         return xf, yf, thetaf
     
     
-    def drive_turtlebot(self,wheel_rpms_path,runtimes):
+    '''def drive_turtlebot(self,wheel_rpms_path,runtimes):
         
         self.msg = """
         placeholder
@@ -114,11 +145,13 @@ class AStarNode(Node):
             rclpy.spin_once(self,timeout_sec=0.1)
             self.get_logger().info(f"Left rpm: {rpm_vals[0]}. Right rpm: {rpm_vals[1]}")
     
+    '''
     def get_vels_from_path(self, path, trajectory_map):
         if path is not None:
             rpm_list = []
             wp_list = []
             runtimes = []
+            trajectory = []
 
             for node in path:
                 if node in trajectory_map:
@@ -135,10 +168,86 @@ class AStarNode(Node):
                     self.get_logger().info(f"associated rpms: ({wheel_rpms[0]},{wheel_rpms[1]}])")
                     rpm_list.append(wheel_rpms)
                     runtimes.append(runtime)
-            rpm_list.append((0,0))
-            runtimes.append(1.0)
+            wp_list.append(trajectory[-1])
+
             return rpm_list,wp_list,runtimes
         return None
+    
+    def glob_frame_to_sim_frame(self,wp):
+        return wp[0]/1000.0,(wp[1]/1000.0)-1.5
+    
+    def sim_frame_to_glob_frame(self,wp):
+        return int(wp[0]*1000),int((wp[1]+1.5)*1000)
+
+
+    def drive_turtlebot(self, waypoints: List[Tuple[float, float]], rpm_pairs: List[Tuple[int, int]], tolerance=100):
+        self.get_logger().info("Following waypoints with fixed RPMs...")
+        assert len(waypoints) == len(rpm_pairs), "One RPM pair per waypoint required"
+
+        # PID controller for small heading correction if robot drifts off course
+        angular_pid = PID(kp=2.5, ki=0.0, kd=0.1)
+
+        for idx, (wp, rpms) in enumerate(zip(waypoints, rpm_pairs)):
+
+            rpm_l = rpms[0]
+            rpm_r = rpms[1]
+            x_goal = wp[0]
+            y_goal = wp[1]
+
+            self.get_logger().info(f"Waypoint {idx+1}: ({x_goal:.2f}, {y_goal:.2f}), RPMs = ({rpm_l}, {rpm_r})")
+
+            # Convert wheel RPMs to velocities
+            wl = rpm_l * 2 * np.pi / 60  # rad/s
+            wr = rpm_r * 2 * np.pi / 60  # rad/s
+
+            base_v = (self.r / 2) * (wr + wl)
+            base_omega = (self.r / self.L) * (wr - wl)
+
+            reached = False
+            while rclpy.ok() and not reached:
+                rclpy.spin_once(self, timeout_sec=0.01)
+
+                if self.current_pose is None:
+                    continue
+
+                x, y, theta = self.current_pose
+                x, y = self.sim_frame_to_glob_frame((x,y))
+                
+
+                # Compute distance to goal
+                dx = x_goal - x
+                dy = y_goal - y
+                distance = np.hypot(dx, dy)
+
+                if distance < tolerance:
+                    self.get_logger().info(f"Reached waypoint {idx+1}")
+                    break
+
+                # Desired heading (straight to goal)
+                target_theta = np.arctan2(dy, dx)
+                heading_error = target_theta - theta
+                heading_error = np.arctan2(np.sin(heading_error), np.cos(heading_error))  # normalize
+
+                # Start with base velocities
+                linear_x = base_v
+                angular_z = base_omega
+
+                # Apply a little correction only if heading error is significant
+                if abs(heading_error) > np.radians(10):
+                    angular_z += angular_pid.compute(heading_error, 0.01)
+
+                # Publish command
+                twist = Twist()
+                twist.linear.x = linear_x
+                twist.angular.z = angular_z
+                self.cmd_vel_pub.publish(twist)
+
+            # Stop between waypoints
+            self.cmd_vel_pub.publish(Twist())
+            rclpy.spin_once(self, timeout_sec=0.1)
+
+        self.get_logger().info("Completed all waypoints.")
+
     def get_clearances(self,user_clearance):
 
         clearance = 5 + (self.R*1000) + user_clearance
@@ -190,8 +299,10 @@ class AStarNode(Node):
                 ],
 
                 "Clearance 7": [
-                    lambda x, y: x >= self.map_x-10-clearance,
-                    lambda x, y: x <= self.map_x,
+                    #lambda x, y: x >= self.map_x-10-clearance,
+                    #lambda x, y: x <= self.map_x,
+                    lambda x, y: x >= self.map_x+1,
+                    lambda x, y: x <= self.map_x+2,
                     lambda x, y: y >= 0,
                     lambda x, y: y <= self.map_y
                 ],
@@ -419,22 +530,24 @@ def main(args=None):
 
     if len(cli_args) == 5:
         # Parse CLI arguments
-        xg = int(cli_args[0])
-        yg = int(cli_args[1])
+        xg = float(cli_args[0])
+        yg = float(cli_args[1])
         rpm1 = int(cli_args[2])
         rpm2 = int(cli_args[3])
         clearance = int(cli_args[4])
     else:
-        xg = 1600
-        yg = 500
+        xg = 5.2
+        yg = 0.0
         rpm1 = 25
         rpm2 = 50
         clearance = 200
 
-    x0 = 500
-    y0 = 2500
+    x0 = 0.5
+    y0 = 1.0
     theta0 = 0
     node = AStarNode()
+    x0,y0 = node.sim_frame_to_glob_frame((x0,y0))
+    xg,yg = node.sim_frame_to_glob_frame((xg,yg))
     start = (x0,y0,theta0) #corresponds to map from other code
     goal = (xg,yg) #corresponds to map from other code
     clearances = node.get_clearances(clearance)
@@ -443,7 +556,9 @@ def main(args=None):
 
     path, _, trajectory_map, _ = node.a_star(start, goal, clearances, action_set)
     wheel_rpms_path,wp_list,runtimes = node.get_vels_from_path(path,trajectory_map)
-    node.drive_turtlebot(wheel_rpms_path,runtimes)
+    node.get_logger().info(f"Wheel RPM path length: {len(wheel_rpms_path)}")
+    node.get_logger().info(f"Waypoint path length: {len(wp_list)}")
+    node.drive_turtlebot(wp_list[1:],wheel_rpms_path)
     frame = np.ones((node.map_y, node.map_x, 3), dtype=np.uint8) * 255
 
     # Generate meshgrid of all (x, y) coordinates
