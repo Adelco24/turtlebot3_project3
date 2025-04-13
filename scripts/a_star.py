@@ -48,6 +48,8 @@ class AStarNode(Node):
         self.r = 0.033     # wheel radius in meters
         self.L = 0.287     # wheel base (distance between wheels)
         self.R = 0.220     # robot radius for clearance
+        self.threshold = self.R * 1000  # goal threshold (radius of robot)
+
 
         self.current_pose = None  # Will be updated from /odom
 
@@ -200,7 +202,6 @@ class AStarNode(Node):
 
         return None
 
-    
     # Convert from global map frame (mm) to sim (meters) with offset
     def glob_frame_to_sim_frame(self, wp):
         return wp[0] / 1000.0, (wp[1] / 1000.0) - 1.5
@@ -393,7 +394,7 @@ class AStarNode(Node):
 
             # Return invalid
             return False
-            
+    
         # Return valid
         return True
 
@@ -403,7 +404,6 @@ class AStarNode(Node):
         
         trajectory_map = {}
         start_time = time.time()
-        threshold = self.R * 1000  # goal threshold (radius of robot)
         early_stop_on = False
         early_stop = 100
         duplicate_distance_threshold = 100
@@ -491,7 +491,7 @@ class AStarNode(Node):
                 #print(current_node)
 
                 # Determine if solution is found
-                if np.sqrt((current_node[0] - goal[0]) ** 2 + (current_node[1] - goal[1]) ** 2) <= threshold:
+                if np.sqrt((current_node[0] - goal[0]) ** 2 + (current_node[1] - goal[1]) ** 2) <= self.threshold:
 
                     # Mark end time
                     end_time = time.time()
@@ -514,10 +514,11 @@ class AStarNode(Node):
                         hq.heappush(open_list, (total_cost, neighbor))
                         parent_map[neighbor] = current_node
 
-                # early stop to give up -- for testing
                 if len(explored_nodes) % 100 == 0:
                     self.get_logger().info(f"{len(explored_nodes)} explored...")
-                    self.get_logger().info(f"{current_node[0]},{current_node[1]},{current_node[2]}")
+                    #self.get_logger().info(f"{current_node[0]},{current_node[1]},{current_node[2]}")
+                
+                # early stop to give up -- for testing
                 if early_stop_on:
                     if len(explored_nodes) >= early_stop:
                         break
@@ -536,7 +537,7 @@ def main(args=None):
 
     # Expecting exactly 5 CLI arguments or none (for defaults)
     if len(cli_args) != 5 and len(cli_args) != 0:
-        print("Usage: ros2 run turtlebot3_project3 a_star.py <xg> <yg> <rpm1> <rpm2> <clearance>")
+        print("Not right number of args.\nUsage: ros2 run turtlebot3_project3 a_star.py <xg> <yg> <rpm1> <rpm2> <clearance>\nOR\nros2 run turtlebot3_project3 a_star.py\nto use defaults")
         return
 
     # Parse arguments or use defaults
@@ -555,28 +556,47 @@ def main(args=None):
 
     # Initial pose in simulation frame, then convert to map
     node = AStarNode()
-    if node.current_pose is not None:
-        x0, y0, theta0 = node.current_pose
-        theta0 = int(round(theta0/30.0)*30)
-    else:
-        x0 = 0.5
-        y0 = 1.0
-        theta0 = 0
+    starttime = time.time()
+    while rclpy.ok() and node.current_pose is None and (time.time()-starttime < 5.0):
+        rclpy.spin_once(node,timeout_sec=0.1)
+    
+    if node.current_pose is None:
+        print("Cannot get starting position of robot and therefore cannot start. Try rerunning.")
+        return
+
+    x0, y0, theta0 = node.current_pose
+    theta0 = int(round(np.degrees(theta0)/30.0)*30)
+
     x0, y0 = node.sim_frame_to_glob_frame((x0, y0))
     xg, yg = node.sim_frame_to_glob_frame((xg, yg))
     start = (x0, y0, theta0)
     goal = (xg, yg)
+    if ((xg-x0)**2)+((yg-y0)**2)<(node.threshold**2):
+        print("Already within goal radius!")
+        return
+
 
     # Setup clearance and actions
     clearances = node.get_clearances(clearance)
+    if not node.is_valid(x0,y0,clearances):
+        print("Start position is not valid, try another.")
+        return
+    if not node.is_valid(xg,yg,clearances):
+        print("Goal position is not valid, try another.")
+        return
     node.set_rpms_and_actions(rpm1, rpm2)
     action_set = node.actions
 
     # Run A* path planner
     path, _, trajectory_map, _ = node.a_star(start, goal, clearances, action_set)
+    if path is not None:
+        node.get_logger().info("A* found path!")
+    else:
+        node.get_logger().info("A* did not find path. Likely that the robot cannot go forward without hit obstacle/clearance boundary.")
+        return
 
     # Convert path to RPMs and waypoint poses
-    wheel_rpms_path, wp_list, runtimes = node.get_vels_from_path(path, trajectory_map)
+    wheel_rpms_path,wp_list,_ = node.get_vels_from_path(path, trajectory_map)
 
     # Drive the robot through waypoints (excluding the start)
     node.drive_turtlebot(wp_list[1:], wheel_rpms_path)
