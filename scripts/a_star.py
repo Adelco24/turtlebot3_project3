@@ -546,13 +546,14 @@ def main(args=None):
         yg = float(cli_args[1])
         rpm1 = int(cli_args[2])
         rpm2 = int(cli_args[3])
-        clearance = int(cli_args[4])
+        clearance = float(cli_args[4])
     else:
         xg = 5.2
         yg = 0.0
         rpm1 = 25
         rpm2 = 50
-        clearance = 200
+        clearance = .2
+    clearance = int(clearance*1000)
 
     # Initial pose in simulation frame, then convert to map
     node = AStarNode()
