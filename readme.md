@@ -3,7 +3,7 @@
 
 ## Map Dimensions
 
-All dimensions are in milimeters.
+All dimensions are in meters.
 
 ![map](map.png)
 
@@ -16,10 +16,10 @@ mkdir -p project3_ws/src
 cd ~/project3_ws/src
 ```
 
-Clone the reposiory
+import the repository
 
 ```sh
-git clone https://github.com/koustubh1012/turtlebot3_project3.git
+unzip turtlebot3_project3.zip
 ```
 
 Source ROS (Enable ROS commands)
@@ -42,76 +42,36 @@ Source ROS (Package will be identified)
 source install/setup.bash
 ```
 
-## Test Setup
+## Launch Environment
 
-Launch Environment
 
 ```sh
-ros2 launch turtlebot3_project3 competition_world.launch
-```
+ros2 launch turtlebot3_project3 competition_world.launch.py x_pose:=0.5 y_pose:=1.0
 
-You should see the turtlebot3 along with the maze in gazebo
+```
+where the values of x_pose and y_pose, corresponding to the values of the spawn location of turtlebot, are chosen by the user.
+
+You should see the turtlebot3 along with the maze in gazebo.
 
 ![gazebo](gazebo.png)
 
-Explore Topics
 
-```sh
-ros2 topic list
-```
+## Run python script
 
-Publish to topic (cmd_vel)
-
-```sh
-ros2 topic pub \cmd_vel geometry_msgs/msg/Twist "linear:
-  x: 0.1
-  y: 0.0
-  z: 0.0
-angular:
-  x: 0.0
-  y: 0.0
-  z: 0.1"
-```
-
-## Write a script
-
-We have provide a script fro reference in [teleop.py](/scripts/teleop.py)
 
 You can run the script using
 
 ```sh
-ros2 run turtlebot3_project3 teleop.py
+ros2 run turtlebot3_project3 a_star.py
 ```
+This runs with the default values of:
+(x,y)_goal = (5.2,0.0) meters
+left wheel rpm = 25 rpm
+right wheel rpm = 50 rpm
+clearance = 0.2 meters
 
-## Add new Python executable
-
-* Write a new python script and store it in a folder
-* Update the CMakeLists.txt file 
-
-```xml
-# Install python scripts
-
-install(PROGRAMS 
-  scripts/teleop.py
-  # You can add more scripts here
-  DESTINATION lib/${PROJECT_NAME}
-)
-
-```
-
-* Build the package
-* Source the install folder
-* Run the executable
-
+For custom values, run the following instead, with your values for x_goal, y_goal, left_rpm, right_rpm, and clearance:
 ```sh
-ros2 run turtlebot3_project3 teleop.py
+ros2 run turtlebot3_project3 a_star.py x_goal y_goal left_rpm right_rpm clearance
 ```
 
-
-# Error
-
-* Pynput Module Not Found
-
-```sh
-pip install pynput
-```
