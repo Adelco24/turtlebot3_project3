@@ -252,7 +252,7 @@ class AStarNode(Node):
 
                 # Stop condition if close enough
                 if distance < tolerance:
-                    self.get_logger().info(f"Reached waypoint {idx+1}")
+                    self.get_logger().info(f"Reached waypoint {idx+1} of {len(waypoints)}")
                     break
 
                 # Calculate heading error
@@ -536,24 +536,23 @@ def main(args=None):
     cli_args = sys.argv[1:]
 
     # Expecting exactly 5 CLI arguments or none (for defaults)
-    if len(cli_args) != 5 and len(cli_args) != 0:
-        print("Not right number of args.\nUsage: ros2 run turtlebot3_project3 a_star.py <xg> <yg> <rpm1> <rpm2> <clearance>\nOR\nros2 run turtlebot3_project3 a_star.py\nto use defaults")
+    if len(cli_args) != 2 and len(cli_args) != 0:
+        print("Not right number of args.\nUsage: ros2 run turtlebot3_project3 a_star.py <xg> <yg>\nOR\nros2 run turtlebot3_project3 a_star.py\nto use defaults")
         return
 
     # Parse arguments or use defaults
-    if len(cli_args) == 5:
+    if len(cli_args) == 2:
         xg = float(cli_args[0])
         yg = float(cli_args[1])
-        rpm1 = int(cli_args[2])
-        rpm2 = int(cli_args[3])
-        clearance = float(cli_args[4])
+        #rpm1 = int(cli_args[2])
+        #rpm2 = int(cli_args[3])
+        #clearance = float(cli_args[4])
     else:
         xg = 5.2
         yg = 0.0
-        rpm1 = 25
-        rpm2 = 50
-        clearance = .2
-    clearance = int(clearance*1000)
+    rpm1 = 25
+    rpm2 = 50
+    clearance = 200 #mm
 
     # Initial pose in simulation frame, then convert to map
     node = AStarNode()
