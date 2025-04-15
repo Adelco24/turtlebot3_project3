@@ -5,7 +5,7 @@ Directory ID: ralbert8
 UID: 120985195
 
 Adam Del Colliano
-Directory ID: adelcol1
+Directory ID: adelcoll
 UID: 115846982
 
 Joseph Shaheen
