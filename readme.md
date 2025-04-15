@@ -1,6 +1,9 @@
 # ENPM 661: Path Planning for Autonomous Robots
 ### Instructions for Project3- Phase2
 
+## ACCESS TO OUR VIDEOS
+https://drive.google.com/drive/folders/1iDzi45sgHjE6V_lIN9iSaKgw5NmZLQ8m?usp=sharing
+
 ## Setup
 
 Create a workspace
