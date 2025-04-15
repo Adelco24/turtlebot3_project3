@@ -1,5 +1,16 @@
 # ENPM 661: Path Planning for Autonomous Robots
 ### Instructions for Project3- Phase2
+Riley Albert
+Directory ID: ralbert8
+UID: 120985195
+
+Adam Del Colliano
+Directory ID: adelcol1
+UID: 115846982
+
+Joseph Shaheen
+Directory ID: jshaheen
+UID: 116534321
 
 ## ACCESS TO OUR VIDEOS
 https://drive.google.com/drive/folders/1iDzi45sgHjE6V_lIN9iSaKgw5NmZLQ8m?usp=sharing
