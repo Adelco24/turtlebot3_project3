@@ -77,9 +77,9 @@ sudo apt-get install python3-opencv && sudo apt install python3-numpy && sudo ap
 ## Part 1 (No ROS) (from the Part01 directory)
 ```sh
 cd ../..
-python Part01/exp_script.py
+python3 Part01/exp_script.py
 ```
-All inputs for part 1 are outlined in the terminal via user input.
+All inputs for part 1 are outlined in the terminal via user input. After the map pops up and finishes solving, press 'q' to close and quit the program.
 
 
 ## Part 2 (ROS): Launch Environment (from the project3_ws directory)
@@ -109,6 +109,7 @@ You should see the turtlebot3 along with the maze in gazebo.
 In a second terminal, also in the project3_ws directory, you can run the a_star node script using
 
 ```sh
+source install/setup.bash
 ros2 run turtlebot3_project3 a_star.py
 ```
 This runs with the default values of:
@@ -119,7 +120,8 @@ clearance = 0.2 meters
 
 For custom goal locations, run the following instead, with your location for (x_goal,y_goal), within the bounds of the maze:
 ```sh
+source install/setup.bash
 ros2 run turtlebot3_project3 a_star.py x_goal y_goal
 ```
-This will drive the robot through the maze, and at the end, will display a map showing all A* waypoints and the space that the robot was allowed to drive in (its clearance area).
+This will drive the robot through the maze, and at the end, will display a map showing all A* waypoints and the space that the robot was allowed to drive in (its clearance area). The code ends once again by pressing 'q' when the popped up final map is on screen.
 
