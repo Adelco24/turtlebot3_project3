@@ -1,15 +1,9 @@
 # ENPM 661: Path Planning for Autonomous Robots
 ### Instructions for Project3- Phase2
 
-## Map Dimensions
-
-All dimensions are in meters.
-
-![map](map.png)
-
 ## Setup
 
-Create a workpace
+Create a workspace
 
 ```sh
 mkdir -p project3_ws/src
@@ -21,6 +15,12 @@ import the repository
 ```sh
 unzip turtlebot3_project3.zip
 ```
+or
+
+```sh
+git clone https://github.com/Adelco24/turtlebot3_project3.git
+```
+
 
 Source ROS (Enable ROS commands)
 
@@ -42,24 +42,41 @@ Source ROS (Package will be identified)
 source install/setup.bash
 ```
 
-## Launch Environment
+Install dependencies
+```sh
 
+```
+
+## Part 1 (No ROS)
+```sh
+python src/turtlebot3_project3/scripts/exp_script.py
+```
+All inputs for part 1 are outlined in the terminal via user input.
+
+
+## Part 2 (ROS): Launch Environment
+
+```sh
+ros2 launch turtlebot3_project3 competition_world.launch.py
+
+```
+to spawn at x = 0.5 meters, y = 1.0 meters,
+or
 
 ```sh
 ros2 launch turtlebot3_project3 competition_world.launch.py x_pose:=0.5 y_pose:=1.0
 
 ```
-where the values of x_pose and y_pose, corresponding to the values of the spawn location of turtlebot, are chosen by the user.
+where the values of x_pose and y_pose, correspond to the values of the spawn location of turtlebot and can be chosen by the user. Spawn within the bounds of the maze.
 
 You should see the turtlebot3 along with the maze in gazebo.
 
 ![gazebo](gazebo.png)
 
 
-## Run python script
+## Run a_star node script
 
-
-You can run the script using
+In a second terminal, you can run the a_star node script using
 
 ```sh
 ros2 run turtlebot3_project3 a_star.py
@@ -70,8 +87,9 @@ left wheel rpm = 25 rpm
 right wheel rpm = 50 rpm
 clearance = 0.2 meters
 
-For custom values, run the following instead, with your values for x_goal, y_goal, left_rpm, right_rpm, and clearance:
+For custom goal locations, run the following instead, with your location for (x_goal,y_goal), within the bounds of the maze:
 ```sh
-ros2 run turtlebot3_project3 a_star.py x_goal y_goal left_rpm right_rpm clearance
+ros2 run turtlebot3_project3 a_star.py x_goal y_goal
 ```
+This will drive the robot through the maze, and at the end, will display a map showing all A* waypoints and the space that the robot was allowed to drive in (its clearance area).
 
