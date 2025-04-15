@@ -552,7 +552,7 @@ def main(args=None):
         yg = 0.0
     rpm1 = 25
     rpm2 = 50
-    clearance = 20 #mm
+    clearance = 50 #mm
 
     # Initial pose in simulation frame, then convert to map
     node = AStarNode()
