@@ -43,7 +43,9 @@ source install/setup.bash
 ```
 
 Install dependencies
+Most packages in this project are native on Python and/or ROS installs, but opencv, numpy, and matplotlib require an extra install, and can be done with the following command:
 ```sh
+sudo apt-get install python3-opencv && sudo apt install python3-numpy && sudo apt-get install python3-matplotlib
 
 ```
 
