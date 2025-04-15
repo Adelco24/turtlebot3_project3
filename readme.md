@@ -17,11 +17,16 @@ https://drive.google.com/drive/folders/1iDzi45sgHjE6V_lIN9iSaKgw5NmZLQ8m?usp=sha
 
 ## Setup
 
-Create a workspace
+Unzip the submission
 
 ```sh
-mkdir -p project3_ws/src
-cd ~/project3_ws/src
+unzip proj3p2_riley_adam_joseph.zip
+```
+
+Enter the workspace
+
+```sh
+cd Part02/project3_ws/src
 ```
 
 import the repository
@@ -42,10 +47,10 @@ Source ROS (Enable ROS commands)
 source /opt/ros/galactic/setup.bash
 ```
 
-Build the workspace
+Build the workspace (from the project3_ws directory)
 
 ```sh
-cd ~/project3_ws
+cd ..
 colcon build --packages-select turtlebot3_project3
 ```
 
@@ -63,16 +68,18 @@ sudo apt-get install python3-opencv && sudo apt install python3-numpy && sudo ap
 
 ```
 
-## Part 1 (No ROS)
+## Part 1 (No ROS) (from the Part01 directory)
 ```sh
-python src/turtlebot3_project3/scripts/exp_script.py
+cd ../..
+python Part01/exp_script.py
 ```
 All inputs for part 1 are outlined in the terminal via user input.
 
 
-## Part 2 (ROS): Launch Environment
+## Part 2 (ROS): Launch Environment (from the project3_ws directory)
 
 ```sh
+cd Part02/project3_ws
 ros2 launch turtlebot3_project3 competition_world.launch.py
 
 ```
@@ -80,6 +87,7 @@ to spawn at x = 0.5 meters, y = 1.0 meters,
 or
 
 ```sh
+cd Part02/project3_ws
 ros2 launch turtlebot3_project3 competition_world.launch.py x_pose:=0.5 y_pose:=1.0
 
 ```
@@ -92,7 +100,7 @@ You should see the turtlebot3 along with the maze in gazebo.
 
 ## Run a_star node script
 
-In a second terminal, you can run the a_star node script using
+In a second terminal, also in the project3_ws directory, you can run the a_star node script using
 
 ```sh
 ros2 run turtlebot3_project3 a_star.py
