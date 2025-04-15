@@ -15,6 +15,12 @@ UID: 116534321
 ## ACCESS TO OUR VIDEOS
 https://drive.google.com/drive/folders/1iDzi45sgHjE6V_lIN9iSaKgw5NmZLQ8m?usp=sharing
 
+## ACCESSS TO GITHUB FOR PART01
+https://github.com/JMechE13/ENPM661
+
+## ACCESS TO GITHUB FOR PART02
+https://github.com/Adelco24/turtlebot3_project3
+
 ## Setup
 
 Unzip the submission
